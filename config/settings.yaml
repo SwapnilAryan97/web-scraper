@@ -1,0 +1,96 @@
+project:
+  output_dir: output
+  run_reports_dir: output/runs
+  temp_dir: output/tmp
+
+sheet:
+  sheet_name:
+  header_row: 1
+  sku_column: sku
+  sku_aliases:
+    - product_sku
+    - sku_code
+  product_name_column: productName
+  product_name_aliases:
+    - product_name
+    - product_title
+    - model_name
+    - title
+    - name
+  source_url_columns:
+    - officialMediaUrl
+    - sourceUrl
+    - amazonUrl
+  process_filled_slots: true
+  image_slot_patterns:
+    - '^base_\d+$'
+    - '^side_\d+$'
+    - '^front_\d+$'
+    - '^back_\d+$'
+    - '^top_\d+$'
+    - '^bottom_\d+$'
+
+network:
+  user_agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36
+  request_timeout_seconds: 20
+  min_delay_seconds: 1.1
+  max_delay_seconds: 2.7
+
+sources:
+  priority:
+    - gsmarena
+    - official_media
+    - browser_fallback
+  max_candidates_per_job: 8
+  official_media:
+    enabled: true
+    extract_from_row_urls: true
+  browser_fallback:
+    enabled: true
+    headless: true
+    page_timeout_seconds: 30
+    amazon_url_column: amazonUrl
+    allow_amazon_fallback: false
+
+quality:
+  min_width: 800
+  min_height: 800
+  max_bytes: 15000000
+  perceptual_hash_distance: 6
+  preferred_extensions:
+    - .jpg
+    - .jpeg
+    - .png
+    - .webp
+
+watermark:
+  enabled: true
+  min_text_length: 4
+  bright_region_threshold: 240
+  max_suspect_regions: 35
+  ocr_keywords:
+    - watermark
+    - getty
+    - shutterstock
+    - alamy
+    - sample
+    - preview
+    - amazon
+    - copyright
+    - do not use
+
+magento:
+  enabled: false
+  dry_run: true
+  timeout_seconds: 30
+  role_mapping:
+    base_1:
+      - image
+      - small_image
+      - thumbnail
+    front_1:
+      - image
+    side_1:
+      - image
+    back_1:
+      - image
