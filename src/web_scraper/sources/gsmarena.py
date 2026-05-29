@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from typing import Optional, Tuple
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import quote_plus, urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -25,6 +25,11 @@ def _unique(values: Iterable[str]) -> list[str]:
         seen.add(value)
         ordered.append(value)
     return ordered
+
+
+def _is_gsmarena_url(url: str) -> bool:
+    hostname = urlparse(url).netloc.lower()
+    return hostname == "gsmarena.com" or hostname.endswith(".gsmarena.com")
 
 
 def parse_search_results(html: str) -> list[dict[str, str]]:
@@ -66,7 +71,7 @@ def parse_product_page(html: str, page_url: str) -> Tuple[list[str], Optional[st
     if meta_image and meta_image.get("content"):
         image_urls.append(urljoin(page_url, meta_image["content"]))
 
-    for image in soup.select(".specs-photo-main img, img[src], img[data-src]"):
+    for image in soup.select(".specs-photo-main img"):
         source = image.get("data-src") or image.get("src")
         if not source:
             continue
@@ -90,7 +95,28 @@ def parse_product_page(html: str, page_url: str) -> Tuple[list[str], Optional[st
 def parse_gallery_page(html: str, page_url: str) -> list[str]:
     soup = BeautifulSoup(html, "html.parser")
     urls: list[str] = []
-    for image in soup.select("img[src], img[data-src]"):
+
+    headings = soup.find_all(["h1", "h2", "h3", "h4"])
+    official_gallery_heading = next(
+        (
+            heading
+            for heading in headings
+            if "official images" in " ".join(heading.stripped_strings).lower()
+        ),
+        None,
+    )
+
+    images: list[BeautifulSoup] = []
+    if official_gallery_heading is not None:
+        for sibling in official_gallery_heading.find_next_siblings():
+            if sibling.name in {"h1", "h2", "h3", "h4"}:
+                break
+            images.extend(sibling.select("img[src], img[data-src]"))
+
+    if not images:
+        images = list(soup.select("img[src], img[data-src]"))
+
+    for image in images:
         source = image.get("data-src") or image.get("src")
         if not source:
             continue
@@ -122,6 +148,9 @@ class GsmArenaSource(ImageSource):
                 settings=settings,
             )
 
+        if self._has_explicit_non_gsmarena_source(job):
+            return []
+
         search_url = f"{GSM_ARENA_BASE_URL}results.php3?sQuickSearch=yes&sName={quote_plus(job.product_name)}"
         response = client.get(search_url)
         response.raise_for_status()
@@ -146,9 +175,16 @@ class GsmArenaSource(ImageSource):
     def _resolve_known_product_url(self, job: ImageJob) -> Optional[str]:
         for key in ("gsmarenaurl", "sourceurl", "officialmediaurl"):
             value = job.metadata.get(key)
-            if value and "gsmarena.com" in value:
+            if value and _is_gsmarena_url(value):
                 return value
         return None
+
+    def _has_explicit_non_gsmarena_source(self, job: ImageJob) -> bool:
+        for key in ("officialmediaurl", "sourceurl"):
+            value = job.metadata.get(key)
+            if value and not _is_gsmarena_url(value):
+                return True
+        return False
 
     def _extract_candidates_from_product_page(
         self,
